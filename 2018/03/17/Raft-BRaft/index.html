@@ -3,14 +3,21 @@
 <head>
   <meta charset="utf-8">
   
-  <title>学无止境</title>
+  <title>Raft &amp; BRaft | 学无止境</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta property="og:type" content="website">
-<meta property="og:title" content="学无止境">
-<meta property="og:url" content="http://yoursite.com/index.html">
+  <meta name="description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Raft &amp; BRaft">
+<meta property="og:url" content="http://yoursite.com/2018/03/17/Raft-BRaft/index.html">
 <meta property="og:site_name" content="学无止境">
+<meta property="og:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
+<meta property="og:image" content="http://yoursite.com/2018/03/17/images/raft_state.jpg">
+<meta property="og:image" content="http://yoursite.com/2018/03/17/images/raft_safety.jpg">
+<meta property="og:updated_time" content="2018-03-18T15:02:48.000Z">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="学无止境">
+<meta name="twitter:title" content="Raft &amp; BRaft">
+<meta name="twitter:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
+<meta name="twitter:image" content="http://yoursite.com/2018/03/17/images/raft_state.jpg">
   
     <link rel="alternate" href="/atom.xml" title="学无止境" type="application/atom+xml">
   
@@ -59,9 +66,7 @@
   </div>
 </header>
       <div class="outer">
-        <section id="main">
-  
-    <article id="post-Raft-BRaft" class="article article-type-post" itemscope itemprop="blogPost">
+        <section id="main"><article id="post-Raft-BRaft" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2018/03/17/Raft-BRaft/" class="article-date">
   <time datetime="2018-03-17T15:40:24.000Z" itemprop="datePublished">2018-03-17</time>
@@ -74,8 +79,8 @@
       <header class="article-header">
         
   
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/17/Raft-BRaft/">Raft &amp; BRaft</a>
+    <h1 class="article-title" itemprop="name">
+      Raft &amp; BRaft
     </h1>
   
 
@@ -122,46 +127,19 @@
     </footer>
   </div>
   
-</article>
-
-
+    
+<nav id="article-nav">
   
-    <article id="post-My-first-post" class="article article-type-post" itemscope itemprop="blogPost">
-  <div class="article-meta">
-    <a href="/2018/03/17/My-first-post/" class="article-date">
-  <time datetime="2018-03-17T15:17:52.000Z" itemprop="datePublished">2018-03-17</time>
-</a>
-    
-  </div>
-  <div class="article-inner">
-    
-    
-      <header class="article-header">
-        
   
-    <h1 itemprop="name">
-      <a class="article-title" href="/2018/03/17/My-first-post/">My first post</a>
-    </h1>
+    <a href="/2018/03/17/My-first-post/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">My first post</div>
+    </a>
   
+</nav>
 
-      </header>
-    
-    <div class="article-entry" itemprop="articleBody">
-      
-        
-      
-    </div>
-    <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/03/17/My-first-post/" data-id="cjewxlrv80000mzp9xb5ylnx9" class="article-share-link">Share</a>
-      
-      
-    </footer>
-  </div>
   
 </article>
-
-
-  
 
 </section>
         
