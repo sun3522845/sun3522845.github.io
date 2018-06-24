@@ -61,10 +61,10 @@
       <div class="outer">
         <section id="main">
   
-    <article id="post-leveldb学习" class="article article-type-post" itemscope itemprop="blogPost">
+    <article id="post-leveldb-skiplist" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
-    <a href="/2018/06/24/leveldb学习/" class="article-date">
-  <time datetime="2018-06-24T09:37:16.000Z" itemprop="datePublished">2018-06-24</time>
+    <a href="/2018/06/24/leveldb-skiplist/" class="article-date">
+  <time datetime="2018-06-24T13:28:16.000Z" itemprop="datePublished">2018-06-24</time>
 </a>
     
   </div>
@@ -75,7 +75,7 @@
         
   
     <h1 itemprop="name">
-      <a class="article-title" href="/2018/06/24/leveldb学习/">leveldb学习</a>
+      <a class="article-title" href="/2018/06/24/leveldb-skiplist/">leveldb-skiplist</a>
     </h1>
   
 
@@ -83,11 +83,16 @@
     
     <div class="article-entry" itemprop="articleBody">
       
+        <p>  Leveldb是google开源的单机kv存储引擎，具有很好的写性能，不错的顺序读性能以及较为一般的随机读性能。leveldb基于<a href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.44.2782&amp;rep=rep1&amp;type=pdf" target="_blank" rel="noopener">LSM</a>算法实现，将数据及索引按照数据的新旧程度分为多个level，并在运行过程中按照一定的策略由低level（新数据）向高level做compaction操作；而在磁盘数据之上通过一种skiplist的数据结构组织内存中的table数据。本文先重点分析下skiplist的实现，后面再逐个分析leveldb其它关键核心代码。<br>
+        
+          <p class="article-more-link">
+            <a href="/2018/06/24/leveldb-skiplist/#more">Read More</a>
+          </p>
         
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/06/24/leveldb学习/" data-id="cjisqufio00026bp950chhf5a" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/06/24/leveldb-skiplist/" data-id="cjisvcxz40002e8p9bclo46sd" class="article-share-link">Share</a>
       
       
     </footer>
@@ -128,7 +133,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/03/17/Raft-BRaft/" data-id="cjisqufii00006bp9ka93jqi0" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/03/17/Raft-BRaft/" data-id="cjisvcxz10001e8p9fqvwdr6d" class="article-share-link">Share</a>
       
       
     </footer>
@@ -164,7 +169,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/03/17/My-first-post/" data-id="cjisqufim00016bp9umzf50uz" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/03/17/My-first-post/" data-id="cjisvcxyx0000e8p9bkpe7sv5" class="article-share-link">Share</a>
       
       
     </footer>
@@ -204,7 +209,7 @@
       <ul>
         
           <li>
-            <a href="/2018/06/24/leveldb学习/">leveldb学习</a>
+            <a href="/2018/06/24/leveldb-skiplist/">leveldb-skiplist</a>
           </li>
         
           <li>

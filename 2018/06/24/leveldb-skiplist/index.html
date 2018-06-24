@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>leveldb-skiplist | sunyan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="Leveldb是google开源的单机kv存储引擎，具有很好的写性能，不错的顺序读性能以及较为一般的随机读性能。leveldb基于LSM算法实现，将数据及索引按照数据的新旧程度分为多个level，并在运行过程中按照一定的策略由低level（新数据）向高level做compaction操作；而在磁盘数据之上通过一种skiplist的数据结构组织内存中的table数据。本文先重点分析下skipli">
+<meta property="og:type" content="article">
+<meta property="og:title" content="leveldb-skiplist">
+<meta property="og:url" content="http://yoursite.com/2018/06/24/leveldb-skiplist/index.html">
+<meta property="og:site_name" content="sunyan">
+<meta property="og:description" content="Leveldb是google开源的单机kv存储引擎，具有很好的写性能，不错的顺序读性能以及较为一般的随机读性能。leveldb基于LSM算法实现，将数据及索引按照数据的新旧程度分为多个level，并在运行过程中按照一定的策略由低level（新数据）向高level做compaction操作；而在磁盘数据之上通过一种skiplist的数据结构组织内存中的table数据。本文先重点分析下skipli">
+<meta property="og:image" content="http://yoursite.com/images/skiplist.gif">
+<meta property="og:updated_time" content="2018-06-24T16:27:46.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="leveldb-skiplist">
+<meta name="twitter:description" content="Leveldb是google开源的单机kv存储引擎，具有很好的写性能，不错的顺序读性能以及较为一般的随机读性能。leveldb基于LSM算法实现，将数据及索引按照数据的新旧程度分为多个level，并在运行过程中按照一定的策略由低level（新数据）向高level做compaction操作；而在磁盘数据之上通过一种skiplist的数据结构组织内存中的table数据。本文先重点分析下skipli">
+<meta name="twitter:image" content="http://yoursite.com/images/skiplist.gif">
+  
+    <link rel="alternate" href="/atom.xml" title="sunyan" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+  
+
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">sunyan</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-leveldb-skiplist" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/06/24/leveldb-skiplist/" class="article-date">
+  <time datetime="2018-06-24T13:28:16.000Z" itemprop="datePublished">2018-06-24</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      leveldb-skiplist
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>  Leveldb是google开源的单机kv存储引擎，具有很好的写性能，不错的顺序读性能以及较为一般的随机读性能。leveldb基于<a href="http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.44.2782&amp;rep=rep1&amp;type=pdf" target="_blank" rel="noopener">LSM</a>算法实现，将数据及索引按照数据的新旧程度分为多个level，并在运行过程中按照一定的策略由低level（新数据）向高level做compaction操作；而在磁盘数据之上通过一种skiplist的数据结构组织内存中的table数据。本文先重点分析下skiplist的实现，后面再逐个分析leveldb其它关键核心代码。<br>  <a id="more"></a></p>
+<p>#skiplist<br>  skiplist作为leveldb中mem table数据组织形式，插入和查找的时间复杂度接近O(logn),同时支持遍历；另外skiplist通过无锁方式实现了读写线程安全性，整个代码不到400行，实现的非常优雅。<br>  这里从网上盗个图，skiplist的结构如下所示，为了优化查找和插入的时间复杂度，在list基础上，每个node会随机扩展出多个next指针，越高level链接起来的node越少，同时skiplist维护一个head_成员，该成员每一层level指向该层第一个node。所以search过程从最上层开始逐层下降，类似于在一种tree结构中search。</p>
+<p>  <img src="/images/skiplist.gif" alt="" title="skiplist"></p>
+<p>skiplist的seek过程代码的主要逻辑如下，函数返回第一个大于等于key的node，第二个参数prev用语insert过程；算法过程即由上层往下层做search，每一层找到大于等于该key值的第一元素，然后降level，直到到达levle0。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> Key, <span class="class"><span class="keyword">class</span> <span class="title">Comparator</span>&gt;</span></span><br><span class="line"><span class="class"><span class="title">typename</span> <span class="title">SkipList</span>&lt;Key,Comparator&gt;:</span>:Node* SkipList&lt;Key,Comparator&gt;::FindGreaterOrEqual(<span class="keyword">const</span> Key&amp; key, Node** prev)</span><br><span class="line">    <span class="keyword">const</span> &#123;</span><br><span class="line">  Node* x = head_;</span><br><span class="line">  <span class="keyword">int</span> level = GetMaxHeight() - <span class="number">1</span>;</span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    Node* next = x-&gt;Next(level);</span><br><span class="line">    <span class="keyword">if</span> (KeyIsAfterNode(key, next)) &#123;</span><br><span class="line">      <span class="comment">// Keep searching in this list</span></span><br><span class="line">      x = next;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">if</span> (prev != <span class="literal">NULL</span>) prev[level] = x;</span><br><span class="line">      <span class="keyword">if</span> (level == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> next;</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// Switch to next list</span></span><br><span class="line">        level--;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p> Insert过程如下，为了做到读写线程的线程安全，skiplist没有使用mutex，而是利用原子语义加memory barrier来实现，node的每个next指针是一个AtomicPointer，为了防止多线程读写导致的undefine行为，node的SetNext和Next方法如下采用的acquire、release内存barrier实现，同时insert的最后一步插入过程中，是由低level向高level执行，而seek过程如上是由高level向低level执行，这样当seek和insert同时进行时，seek走到某一个level看到的next内存指针指向正在插入的节点，以上memory barrier能保证低于该level的next指针同样指向正在插入的node。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">template&lt;typename Key, class Comparator&gt;</span><br><span class="line">void SkipList&lt;Key,Comparator&gt;::Insert(const Key&amp; key) &#123;</span><br><span class="line">  Node* prev[kMaxHeight];</span><br><span class="line">  Node* x = FindGreaterOrEqual(key, prev);</span><br><span class="line">  assert(x == NULL || !Equal(key, x-&gt;key));</span><br><span class="line"></span><br><span class="line">  int height = RandomHeight();</span><br><span class="line">  if (height &gt; GetMaxHeight()) &#123;</span><br><span class="line">    for (int i = GetMaxHeight(); i &lt; height; i++) &#123;</span><br><span class="line">      prev[i] = head_;</span><br><span class="line">    &#125;</span><br><span class="line">max_height_.NoBarrier_Store(reinterpret_cast&lt;void*&gt;(height));</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  x = NewNode(key, height);</span><br><span class="line">  for (int i = 0; i &lt; height; i++) &#123;</span><br><span class="line">    x-&gt;NoBarrier_SetNext(i, prev[i]-&gt;NoBarrier_Next(i));</span><br><span class="line">    prev[i]-&gt;SetNext(i, x);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>insert过程中需要分配一个node，为了节省内存空间，每个节点的level高度采用随机分配算法，而当节点的高度大于当前整个skiplist的最大高度时，需要更新最大高度，这里便存在race</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/06/24/leveldb-skiplist/" data-id="cjisvcxz40002e8p9bclo46sd" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2018/03/17/Raft-BRaft/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Raft &amp; BRaft</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/03/">March 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2018/06/24/leveldb-skiplist/">leveldb-skiplist</a>
+          </li>
+        
+          <li>
+            <a href="/2018/03/17/Raft-BRaft/">Raft &amp; BRaft</a>
+          </li>
+        
+          <li>
+            <a href="/2018/03/17/My-first-post/">My first post</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2018 Yan Sun<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+  </div>
+</body>
+</html>
