@@ -5,19 +5,19 @@
   
   <title>Raft &amp; BRaft | sunyan</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
+  <meta name="description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。">
 <meta property="og:type" content="article">
 <meta property="og:title" content="Raft &amp; BRaft">
 <meta property="og:url" content="http://yoursite.com/2018/03/17/Raft-BRaft/index.html">
 <meta property="og:site_name" content="sunyan">
-<meta property="og:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
-<meta property="og:image" content="http://yoursite.com/2018/03/17/images/raft_state.jpg">
-<meta property="og:image" content="http://yoursite.com/2018/03/17/images/raft_safety.jpg">
-<meta property="og:updated_time" content="2018-03-18T15:02:48.000Z">
+<meta property="og:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。">
+<meta property="og:image" content="http://yoursite.com/images/raft_state.jpg">
+<meta property="og:image" content="http://yoursite.com/images/raft_safety.jpg">
+<meta property="og:updated_time" content="2018-06-24T11:16:06.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Raft &amp; BRaft">
-<meta name="twitter:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。 raftraft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者">
-<meta name="twitter:image" content="http://yoursite.com/2018/03/17/images/raft_state.jpg">
+<meta name="twitter:description" content="前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。">
+<meta name="twitter:image" content="http://yoursite.com/images/raft_state.jpg">
   
     <link rel="alternate" href="/atom.xml" title="sunyan" type="application/atom+xml">
   
@@ -88,7 +88,7 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        <p>前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。</p>
+        <p>前段时间系统的学习了raft算法及百度开源raft实现，这里就算法的及工程实现上的一些细节做下分享。<br><a id="more"></a></p>
 <h2 id="raft"><a href="#raft" class="headerlink" title="raft"></a>raft</h2><p>raft是一种分布式一致性协议，是paxos算法的一个变种，虽然paxos是目前为止唯一被严格数学证明的分布式一致性协议，但是由于其难以理解及离工程实现很远，导致其在工业界没有被广泛使用；而raft协议提出正是基于易于理解和实现而提出;对于想要深入学习raft算法的同学，可以去详细阅读作者的博士论文<a href="https://ramcloud.stanford.edu/~ongaro/thesis.pdf" target="_blank" rel="noopener">CONSENSUS: BRIDGING THEORY AND PRACTICE</a>.为了做到易于理解，raft算法确定采用强主的思想：</p>
 <ol>
 <li>永远以leader的日志为准，日志只能从leader流向follower。</li>
@@ -96,7 +96,7 @@
 </ol>
 <p>所以相对于paxos，raft协议可以将算法的理解划分为leader election和log replication两个部分，而不用在选主的过程中再去考虑日志的收集，因为选出来的leader一定是拥有最新最全log（被绝大多数成员所接受的log）。</p>
 <p>  raft成员组中的节点存在leader、follower及candidate三种角色状态，状态转换关系如下图，当follower节点超时没有收到leader的心跳或者append请求时，会切换为candidate发起投票，当candidate收获绝大多数成员的投票则成为leader，如果发现有成员拥有更新的term则切换为follower。</p>
-<p>  <img src="../images/raft_state.jpg" alt="" title="raft state"></p>
+<p>  <img src="/images/raft_state.jpg" alt="" title="raft state"></p>
 <p>  Raft是基于quorum-based consesus协议，所以算法的根基还是超过一半成员的原则，即成员中有超过一半成员时正常，集群时仍然可以work，而算法每个过程和细节正是基于这一原则保证了算法的正确性，数据的完整性，因为算法过程中两个绝大数成员集合必交集，论文里也是基于这一原则，用反证法证明了不能存在某一时刻的leader的log里没有被绝大多数成员接受的log。</p>
 <p>  raft协议里一个很重要的部分便是采用term来作为全局的logica clock，我的理解一个term周期内是一次稳定的一主多从的架构，当集群中出现异常导致重新选主，这样需要大家投票来决定下次的leader和term，总之term是和leader绑定的，一个term只能有一个leader,任何一个成员在同一个term下只会投票个一个leader。</p>
 <h3 id="leader-election"><a href="#leader-election" class="headerlink" title="leader election"></a>leader election</h3><p>  选主是所有quorum-based consesus协议都要解决的问题，在raft协议里通过主从heartbeat来驱动选主，即当follower发现超过预先设置的timeout没有收到leader的heartbeat或者appendentry，follower将自己的term+1，切换为candidate角色、选举自己并发起投票；对于该节点回在以下三种情况下结束此次选举：</p>
@@ -114,14 +114,14 @@
 <li>当两个节点上在某一个log entry完全一致的情况下，该log entry前面的log一定也是一致的。</li>
 </ul>
 <h3 id="safety"><a href="#safety" class="headerlink" title="safety"></a>safety</h3><p>论文该部分主要针对raft算法做了一些补充，并在此基础上证明了算法的正确有效性。</p>
-<p> <img src="../images/raft_safety.jpg" alt="" title="raft state"></p>
+<p> <img src="/images/raft_safety.jpg" alt="" title="raft state"></p>
 <p>其实该章节里最不好理解的部分就是上图了，它抛出了一个场景：在不断有节点挂掉重新选举的情况下，可能会存在被commit的log entry被新的leader舍弃；如上图，刚开始S1作为集群的leader在同步term为2、index为2的log entry的时候挂掉，S5被选为term3的leader并准备同步term为3、index为2的log entry,但是就在此时S5也挂掉；接着S1已经恢复并在此当选为term4的leader，如果这个时候S1去commit term为2的log entry然后再次挂掉，新当选的S5会将term为2的log覆盖掉。所以算法中必须加个限制每个leader只能commit当前term下的log，而不能commit之前term的log，之前term的log只有在当前term被commit的时候一并commit，或者交友之前term的leader来commit。</p>
 <p>我的理解是只有leader当前term下的log是最新的log entry，因此只有当前term下的log entry被同步到大部分节点情况下，下任leader才一定会从拥有该log entry的follower中产生，因为这个log entry足够新，足够让他胜任，而之前term的log entry就无法保证了。</p>
 <h2 id="braft"><a href="#braft" class="headerlink" title="braft"></a>braft</h2>
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/03/17/Raft-BRaft/" data-id="cjisn3dc100029fp92dhe6yru" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/03/17/Raft-BRaft/" data-id="cjisqufii00006bp9ka93jqi0" class="article-share-link">Share</a>
       
       
     </footer>
