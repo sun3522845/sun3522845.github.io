@@ -15,7 +15,7 @@
 <meta property="og:image" content="http://yoursite.com/images/footer.png">
 <meta property="og:image" content="http://yoursite.com/images/block.png">
 <meta property="og:image" content="http://yoursite.com/images/filter_block.png">
-<meta property="og:updated_time" content="2018-07-03T10:13:40.000Z">
+<meta property="og:updated_time" content="2018-07-03T10:21:29.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="leveldb-sstable">
 <meta name="twitter:description" content="上文详细介绍了LevelDB的table数据在内存组织形式，而作为一种数据库存储引擎，LevelDB还需要考虑如何将数据持久化到磁盘，以及如何通过一定的索引结构提高数据的查询效率及较少磁盘io，sstable正是levledb实现这些问题的核心模块，当memtable达到一定阈值后便会根据一定的策略写入到sstable中。">
@@ -99,26 +99,26 @@
 <li>meta block:用于存放过滤索引，一个meta block对应一个过滤策略，默认只有一个</li>
 <li>meta index block:结构和data block相同，用来存储和索引以上各个meta block在文件中的offset</li>
 <li>data index block:结构和data block相同，用来存储和索引以上各个data block在文件中的offset</li>
-<li><p>footer:文件结尾部分存储和索引meta index block 和data index block</p>
-<p>下面详细分析这几个部分的内部结构及原理。</p>
-</li>
+<li>footer:文件结尾部分存储和索引meta index block 和data index block</li>
 </ul>
-<hr>
-<h3 id="footer"><a href="#footer" class="headerlink" title="footer"></a>footer</h3><p>  <img src="/images/footer.png" alt="" title="footer"></p>
+<p>下面详细分析这几个部分的内部结构及原理。</p>
+<h3 id="foter"><a href="#foter" class="headerlink" title="foter"></a>foter</h3><p><img src="/images/footer.png" alt="" title="footer"></p>
 <p>  如上图所示，footer主要存储meta index、data index和magic number两个部分的handle，每个handle有offset和size部分组成，为了有效利用空间，leveldb采用了varint64编码的方式，即采用可变长度，不过这里我感觉没必要采用编码，因为作为sstable结尾固定部分，它的长度是固定，所以如上图sstable会在handle后面补齐用来确保达到固定最大长度40byte.</p>
 <h3 id="block"><a href="#block" class="headerlink" title="block"></a>block</h3><p>  <img src="/images/block.png" alt="" title="block"></p>
 <p>  如上图block中record按照key的偏序关系append到block中，为了提高seek的性能，同时为了优化存储空间，block中会对讲record拆分中多个连续的group，而group中的每个record会共享key的公共head部分，于此同时，每一个group第一条record，通过所有record后面restart point索引；在record的后面紧接着存储一段restart point数组，在block的seek过程分为两步：</p>
-<pre><code>1. 通过二分查找，定位到record所在的group
-2. 在group中顺序查找定位到record
-所以一次seek的时间复杂读接近与o(log N/m)+o(m),这里m为一个group中record的平均数量,leveldb默认是16。
-</code></pre><p>   restart point数组后面是restart point数组的size，用来定位数组第一个成员，最后用一个1byte存储加密类型，32bit存储crc校验码。<br>   另外SSTABLE中的data index block和meta index block都是采用的这种结构，因为这两部分也是满足kv语义的，如上图data index block的key对应该data block的最大值上限，value对应data block的offset，而meta index block的key对应meta的fileter那么，value对应meta block的offset。</p>
+<ol>
+<li>通过二分查找，定位到record所在的group</li>
+<li>在group中顺序查找定位到record</li>
+</ol>
+<p>所以一次seek的时间复杂读接近与o(log N/m)+o(m),这里m为一个group中record的平均数量,leveldb默认是16。</p>
+<p>   restart point数组后面是restart point数组的size，用来定位数组第一个成员，最后用一个1byte存储加密类型，32bit存储crc校验码。<br>   另外SSTABLE中的data index block和meta index block都是采用的这种结构，因为这两部分也是满足kv语义的，如上图data index block的key对应该data block的最大值上限，value对应data block的offset，而meta index block的key对应meta的fileter那么，value对应meta block的offset。</p>
 <h3 id="filter-block"><a href="#filter-block" class="headerlink" title="filter block"></a>filter block</h3><p>  <img src="/images/filter_block.png" alt="" title="filter block"></p>
 <p>  为了避免不必要的查找和io，sstable中增加了meta file block部分，用来过滤一些确定不存在record上的查找，如上图，filter block会根据数据量创建多个filter（默认2k，即一个block对应一个filter），这里的filter策略leveldb默认使用的bloom filter，紧接着filter部分的是filter offset数组，最后是filter offset数组大小即filter base lg（即一个filter对应的数据量）。</p>
 
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2018/07/01/leveldb-sstable/" data-id="cjj5jcu4e00026vp9676qvbfa" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2018/07/01/leveldb-sstable/" data-id="cjj5jigvc00027tp9aryzg7gp" class="article-share-link">Share</a>
       
       
     </footer>
