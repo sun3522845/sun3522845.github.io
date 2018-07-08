@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>levledb-compaction | sunyan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="leveldb的基础是lsm，因此leveldb通过compaction机制来维护kv数据及索引结构。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="levledb-compaction">
+<meta property="og:url" content="http://yoursite.com/2018/07/05/leveldb-compaction/index.html">
+<meta property="og:site_name" content="sunyan">
+<meta property="og:description" content="leveldb的基础是lsm，因此leveldb通过compaction机制来维护kv数据及索引结构。">
+<meta property="og:image" content="http://yoursite.com/images/level-sstable.png">
+<meta property="og:image" content="http://yoursite.com/images/leveldb-compaction.png">
+<meta property="og:updated_time" content="2018-07-08T14:24:30.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="levledb-compaction">
+<meta name="twitter:description" content="leveldb的基础是lsm，因此leveldb通过compaction机制来维护kv数据及索引结构。">
+<meta name="twitter:image" content="http://yoursite.com/images/level-sstable.png">
+  
+    <link rel="alternate" href="/atom.xml" title="sunyan" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+  
+
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">sunyan</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-leveldb-compaction" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/07/05/leveldb-compaction/" class="article-date">
+  <time datetime="2018-07-05T10:57:25.000Z" itemprop="datePublished">2018-07-05</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      levledb-compaction
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>leveldb的基础是lsm，因此leveldb通过compaction机制来维护kv数据及索引结构。<br><a id="more"></a></p>
+<h2 id="level"><a href="#level" class="headerlink" title="level"></a>level</h2><p>再分析compaction机制之前，需要先介绍下leveldb的数据文件(sstable)的组织形式。</p>
+<p><img src="/images/level-sstable.png" alt="" title="level sstable"></p>
+<p>如上图，leveldb按照数据的新旧程度，将table数据组织划分到多个level中（默认最大为7层），因此level越高，代表数据会越旧并且sstable数据文件size会越大，默认情况下每个level上的数据文件大小是上一层的10倍，所有level数据文件总加memtable和构成了db的数据，具体细节可以总结如下几点：</p>
+<ol>
+<li>level0的每个数据文件由memtable直接compatcion而来，因此level0中不同文件的数据是存在重叠的，同时level0中文件数据存在时间上的偏序关系，即文件的生成时间越晚，数据越新。</li>
+<li>level1以上的数据文件是通过上一个level以及本level数据compation而来，因此同一level间的数据之间是不存在overlap。</li>
+</ol>
+<p>以上便是leveldb数据文件组织的核心，而put/get请求和compaction操作正是基于此基础之上的实现。</p>
+<h2 id="compaction"><a href="#compaction" class="headerlink" title="compaction"></a>compaction</h2><p>compaction机制用来将memtable及上一层level的数据合并生成到下一层level中去,核心思想通过overlap来确定compaction的range和输入文件，然后通过归并排序来生成新的数据文件，总的宗旨为：</p>
+<ul>
+<li>优化读写减少io</li>
+<li>避免过多数据的compaction带来的io抖动</li>
+</ul>
+<p>根据触发条件不同可以分为如下几类：</p>
+<h3 id="memtable-compcation"><a href="#memtable-compcation" class="headerlink" title="memtable compcation"></a>memtable compcation</h3><p>当memtable的size超过一定阈值，便会触发memtable compaction，过程相对来说比较简单，即将memtable中的数据按照skiplist中的顺序写入到新生成的文件中，不过这里会有三个点需要注意：</p>
+<ul>
+<li>为了在compaction过程中不去阻塞新来的读写请求，leveldb中会有两个memtable mem_和imm_，imm_用来compaction，mem_用来相应新来的读写请求，类似于双buffer机制。</li>
+<li>memtable并不是一定compact到level0中的数据文件中，如果发现memtable中数据和level0中的数据不存在重叠，会选择下更下层level做compaction，这样做是为了减少level0到level1的compaction，不过这里选择的level需要满足两点：1. memtable和这层数据没有重叠 2. memable数据范围和这层的下一层重叠的数据量小于制定阈值（防止生成的文件往下层做compaction造成大量的io。</li>
+<li>compaction选择的level不能超过一定上限（系统默认为level2），正如上面所述，跳过level0向下层level compaction的优势是避免不必要的compaction，但是如果选择了越靠下层的level，上层产生数据重叠的可能性越大，从而磁盘浪费越明显。</li>
+</ul>
+<h3 id="size-compcation"><a href="#size-compcation" class="headerlink" title="size compcation"></a>size compcation</h3><p>当某一level的数据文件的总大小超过该层的阈值，leveldb会选择从该level中选择一个文件和下层level中数据文件做compcation，为了防止热点，leveldb的做法是轮询选择某一个level上的文件做compcation.</p>
+<p><img src="/images/leveldb-compaction.png" alt="" title="level compaction"></p>
+<p>如上图，size compaction过程就是从相邻的两个level中选择存在重叠的table数据文件做归并排序，最终输出到下一层level中新生成的数据文件中。</p>
+<p>这里比较复杂的地方应该是compaction输入文件的选择策略，除了上面描述的阈值加轮询的策略，另外在此基础上还有额外的优化，如上图，在level N的输入文件除了轮询到的文件，leveldb还会在此基础上扩展多个文件，只要需要新扩展的文件不会导致level N+1的文件也需要做相应扩展（数据重叠范围变大）即可。</p>
+<h3 id="seek-compaction"><a href="#seek-compaction" class="headerlink" title="seek compaction"></a>seek compaction</h3><p>在处理读请求时，为了避免过多的无效io，如太多的请求没有在第一个sstable文件中命中，leveldb中还提供了seek compaction机制，其实做法很简单，在每个filemeta中维护一个allow_seeks变量，当发生无效的seek（未命中）的情况，allow_seeks减一，直到allow_seeks小于0便触发seek compaction，至于compaction的过程和size compaction一样。</p>
+<h2 id="Version"><a href="#Version" class="headerlink" title="Version"></a>Version</h2><p>数据文件的compaction是后台异步单线程执行的，为了保证compaction对并发用户读写请求的透明，leveldb通过类似于mvcc多版本控制的version机制来控制数据文件的compaction及文件的生命周期,这里首先解释下几个关键词：</p>
+<ul>
+<li>Vesion:可以看作是某个版本下，所有level下数据文件的集合</li>
+<li>VersionSet：Version集合，Version以双向链表的方式组织，链表头是最新的version（current），即用来出来新来的读写请求的数据集。</li>
+<li>VersionEdit:对应一次compaction操作，包括删除的数据文件和新增的数据文件，current+versionedit生成最新的version，所以versionedit可以看作是version上的一次事务。</li>
+</ul>
+<p>通过version机制来保障不同时间下的读写请求之间的隔离性，比如当一次读请求正在seek某个sstable，另外的写请求触发了compaction需要删除之前读请求的sstable文件，但是version机制保障了改文件必须在没有任何引用（即不在有读请求）的情况下才可以删除。</p>
+<h3 id="manifest"><a href="#manifest" class="headerlink" title="manifest"></a>manifest</h3><p>为了保证version的变迁的持久性，leveldb将versionedit写入到manifest文件中，即在生成新version之前先持久化到manifest文件中，主要逻辑在logandapply接口中，这样leveldb在启动过程中只需要加载manifest文件就可以恢复出所有数据文件的元数据信息；</p>
+<p>另外leveldb中还设置了一个current文件用以指示当前的manifest文件。</p>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>compactoin和version是leveldb关于如何实现lsm的一个重要组成部分，很多实现细节关乎到db的读写性能，因此在后续的rocksdb中也做了大量的优化。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2018/07/05/leveldb-compaction/" data-id="cjjb6csij0002jxp9ennilg2j" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2018/07/01/leveldb-sstable/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">leveldb-sstable</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/07/">July 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/06/">June 2018</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/03/">March 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2018/07/05/leveldb-compaction/">levledb-compaction</a>
+          </li>
+        
+          <li>
+            <a href="/2018/07/01/leveldb-sstable/">leveldb-sstable</a>
+          </li>
+        
+          <li>
+            <a href="/2018/06/24/leveldb-skiplist/">leveldb-skiplist</a>
+          </li>
+        
+          <li>
+            <a href="/2018/03/17/Raft-BRaft/">Raft &amp; BRaft</a>
+          </li>
+        
+          <li>
+            <a href="/2018/03/17/My-first-post/">My first post</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2018 Yan Sun<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+  </div>
+</body>
+</html>
